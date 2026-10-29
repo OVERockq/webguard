@@ -1,3 +1,9 @@
 dist/
 tests/unit/.fixed.php
 .DS_Store
+
+# 로컬 Claude/AI 도구 파일 (메모리·설정은 공개 저장소에 올리지 않음)
+.claude/
+CLAUDE.local.md
+memory/
+MEMORY.md
