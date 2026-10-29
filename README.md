@@ -1,5 +1,7 @@
 # WebGuard — 운영 중인 PHP / HTML·JS 웹사이트 보안 점검·패치 도구
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+
 운영 서버에 설치해서 **분석 → 백업 → 검사 → 계획 → 적용 → 검증(→ 롤백)** 순서로 동작합니다.
 WordPress, 제로보드4, XpressEngine, Rhymix, 그누보드4/5, 직접 만든 PHP 사이트, 정적 HTML/JS 사이트를 지원합니다.
 
@@ -291,3 +293,17 @@ SITE_DIR=/tmp/wgsite tests/docker/legacy/run-test.sh
 # 통합 테스트: WordPress + nginx + PHP-FPM
 tests/docker/wordpress/run-test.sh
 ```
+
+---
+
+## 11. 라이선스
+
+[MIT License](LICENSE)로 공개합니다. 개인·기업 누구나 무료로 사용, 복사, 수정, 배포, 판매할 수 있습니다. 저작권 표시와 라이선스 문구만 함께 남겨 주세요.
+
+본 소프트웨어는 "있는 그대로" 제공되며 어떠한 보증도 하지 않습니다. 운영 서버에 적용하기 전에 백업과 검토를 꼭 진행하세요.
+
+## 12. 개발자
+
+- **ikkcu** — [https://www.ikkcu.com](https://www.ikkcu.com)
+- 저장소: [github.com/OVERockq/webguard](https://github.com/OVERockq/webguard)
+- 버그 제보·기능 제안: [GitHub Issues](https://github.com/OVERockq/webguard/issues)
