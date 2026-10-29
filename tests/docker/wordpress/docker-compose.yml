@@ -1,0 +1,10 @@
+services:
+  db:
+    image: mariadb:10.6
+    environment: { MARIADB_ROOT_PASSWORD: rootpw, MARIADB_DATABASE: wp, MARIADB_USER: wp, MARIADB_PASSWORD: wppass }
+  wp:
+    build: .
+    depends_on: [db]
+    environment: { WORDPRESS_DB_HOST: db, WORDPRESS_DB_USER: wp, WORDPRESS_DB_PASSWORD: wppass, WORDPRESS_DB_NAME: wp, WORDPRESS_DEBUG: "1" }
+    volumes:
+      - ../../..:/opt/webguard:ro

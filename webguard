@@ -1,0 +1,169 @@
+#!/usr/bin/env bash
+# WebGuard - PHP / HTML·JS 웹사이트 보안 점검 및 안전 패치 도구
+#   분석(analyze) → 백업(backup) → 검사(scan) → 계획(plan) → 적용(apply) → 검증(verify) / 롤백(rollback)
+set -u
+set -o pipefail
+
+_self="$0"
+while [ -L "$_self" ]; do _l="$(readlink "$_self")"; case "$_l" in /*) _self="$_l" ;; *) _self="$(dirname "$_self")/$_l" ;; esac; done
+WG_HOME="$(cd "$(dirname "$_self")" && pwd -P)"
+export WG_HOME
+
+for _lib in common changes detect backup scan rules/cms rules/compat plan actions datacheck ai apply; do
+  # shellcheck disable=SC1090
+  . "$WG_HOME/lib/$_lib.sh" || { echo "라이브러리 로드 실패: $_lib" >&2; exit 1; }
+done
+
+usage() {
+  cat <<EOF
+WebGuard $WG_VERSION - 웹사이트 보안 점검/패치 도구
+
+사용법: webguard <명령> [옵션]
+
+명령:
+  run        분석 → 백업 → 검사 → 계획까지 한 번에 실행 (적용은 하지 않음, --apply 시 적용까지)
+  analyze    서버/PHP/웹서버/CMS 환경 분석 및 기준 응답 수집 (새 실행 ID 생성)
+  backup     문서루트·서버설정·DB 백업 (+체크섬/권한 목록)
+  scan       취약점 검사
+  plan       변경 계획 수립 (plan.tsv / plan.md)
+  apply      계획 적용 (작업별 검증 + 실패 시 자동 롤백)
+  verify     현재 사이트 상태를 기준 응답과 비교
+  rollback   적용한 작업 되돌리기
+  restore    백업에서 문서루트 전체 복원
+  report     보고서(report.md) 생성
+  status     실행 기록 목록
+
+  datacheck  변환 전후 데이터 검증
+               snapshot [--label L]   페이지 본문(정규화)·DB 체크섬 스냅샷 저장
+               compare <A> [B]        두 스냅샷 비교 (B 생략 시 현재 상태와 비교). 예: compare pre post
+               target [--target-url]  현재 PHP ↔ 목표 PHP 비교: 같은 DB 읽기 결과 + 같은 URL 페이지
+               status                 스냅샷/비교 결과 목록
+  ai-review  AI(Claude/ChatGPT) 2차 검증: [code|manual|data|all]
+               code   자동 코드 변환 diff 가 같은 동작인지
+               manual 자동 변환 불가 항목 수정안
+               data   데이터 검증에서 나온 차이가 무해한지/회귀인지
+  ai-test    AI API 연결 확인
+
+옵션:
+  --root DIR           문서루트 (예: /var/www/html)
+  --url URL            사이트 주소 (예: https://example.com) - 실측 검증에 필요
+  --site NAME          사이트 이름 (기본: 문서루트 경로 기반)
+  --run ID             특정 실행 ID 사용 (기본: 해당 사이트의 최근 실행)
+  --target-php VER     마이그레이션 목표 PHP 버전 (예: 8.3) → 호환성 분석/변환 포함
+  --target-php-bin P   목표 버전 PHP CLI 경로 (정밀 문법검사)
+  --php-bin P          문법검사에 사용할 PHP CLI (기본: 웹 PHP와 같은 버전 자동 탐색)
+  --urls FILE          스모크 테스트에 추가할 URL 목록 (한 줄에 경로 하나)
+  --only 1,3,5         apply/rollback 대상 작업 번호 지정
+  --dry-run            apply 미리보기
+  --yes, -y            확인 질문 없이 진행
+  --apply              run 명령에서 계획까지 마친 후 적용까지 진행
+  --offline            외부 조회(WordPress 체크섬/최신버전 등) 안 함
+  --reload-php         .user.ini 변경 후 PHP-FPM 을 reload 하여 즉시 반영 (기본: 캐시 만료 대기)
+  --i-have-backup      apply 시 백업 확인 생략 (비권장)
+  --no-local-resolve   도메인을 127.0.0.1 로 고정하지 않고 DNS 그대로 접속
+  --config FILE        설정 파일 (기본: /etc/webguard/webguard.conf)
+  --label NAME         datacheck snapshot 라벨
+  --target-url URL     datacheck target: 목표 PHP 로 같은 사이트를 서비스하는 주소 (생략 시 목표 PHP 내장 서버)
+  --no-data-check      apply 시 페이지/DB 데이터 비교 안 함
+  --ai                 run: 계획 후 AI 검토(code,manual), --apply 시 적용 후 data 검토까지
+  --provider P         AI 제공자: claude | openai (기본: claude)
+  --model M            AI 모델 (기본: claude-opus-5-5 / gpt-5)
+  --ai-dry-run         AI 에 보낼 요청만 만들고 전송하지 않음
+  --ai-gate            apply 시 AI 가 '문제'로 판정한 코드 변환은 건너뜀
+  --verbose, --debug
+
+예:
+  webguard run --root /var/www/html --url https://example.com
+  vi /var/lib/webguard/sites/var_www_html/latest/plan.tsv     # 필요시 y/n 조정
+  webguard apply --root /var/www/html
+  webguard run --root /home/user/public_html --url http://old.example.com --target-php 8.3
+  webguard datacheck target --root /home/user/public_html --target-url http://new-staging.example.com
+  WG_AI_API_KEY=sk-... webguard ai-review all --root /home/user/public_html --provider claude
+EOF
+}
+
+OPT_ROOT=""; OPT_URL=""; OPT_SITE=""; OPT_RUN=""; OPT_TARGET_PHP=""; OPT_TARGET_PHP_BIN=""; OPT_PHP_BIN=""
+OPT_URLS_FILE=""; OPT_ONLY=""; OPT_DRY_RUN=0; OPT_APPLY=0; OPT_NO_BACKUP=0
+OPT_LABEL=""; OPT_TARGET_URL=""; OPT_AI=0; OPT_AI_PROVIDER=""; OPT_AI_MODEL=""; OPT_AI_DRY_RUN=0; OPT_AI_GATE=0
+OPT_ARGS=()
+CMD="${1:-}"; [ $# -gt 0 ] && shift
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --root) OPT_ROOT="$2"; shift ;;
+    --url) OPT_URL="$2"; shift ;;
+    --site) OPT_SITE="$2"; shift ;;
+    --run) OPT_RUN="$2"; shift ;;
+    --target-php) OPT_TARGET_PHP="$2"; shift ;;
+    --target-php-bin) OPT_TARGET_PHP_BIN="$2"; shift ;;
+    --php-bin) OPT_PHP_BIN="$2"; shift ;;
+    --urls) OPT_URLS_FILE="$2"; shift ;;
+    --only) OPT_ONLY="$2"; shift ;;
+    --config) WG_CONFIG="$2"; shift ;;
+    --dry-run) OPT_DRY_RUN=1 ;;
+    --apply) OPT_APPLY=1 ;;
+    -y|--yes) WG_YES=1 ;;
+    --offline) WG_ONLINE_OVERRIDE=0 ;;
+    --reload-php) WG_RELOAD_PHP=1 ;;
+    --i-have-backup) OPT_NO_BACKUP=1 ;;
+    --no-local-resolve) WG_LOCAL_RESOLVE=0 ;;
+    --verbose) WG_VERBOSE=1 ;;
+    --debug) WG_DEBUG=1; WG_VERBOSE=1 ;;
+    --label) OPT_LABEL="$2"; shift ;;
+    --target-url) OPT_TARGET_URL="${2%/}"; shift ;;
+    --no-data-check) WG_DATA_CHECK_OVERRIDE=0 ;;
+    --ai) OPT_AI=1 ;;
+    --provider) OPT_AI_PROVIDER="$2"; shift ;;
+    --model) OPT_AI_MODEL="$2"; shift ;;
+    --ai-dry-run) OPT_AI_DRY_RUN=1 ;;
+    --ai-gate) OPT_AI_GATE=1 ;;
+    -h|--help) usage; exit 0 ;;
+    -*) echo "알 수 없는 옵션: $1" >&2; usage; exit 1 ;;
+    *) OPT_ARGS+=("$1") ;;
+  esac
+  shift
+done
+
+wg_load_config
+[ -n "${WG_ONLINE_OVERRIDE:-}" ] && WG_ONLINE="$WG_ONLINE_OVERRIDE"
+[ -n "${WG_DATA_CHECK_OVERRIDE:-}" ] && WG_DATA_CHECK="$WG_DATA_CHECK_OVERRIDE"
+[ "${WG_AI_GATE:-0}" = 1 ] && OPT_AI_GATE=1
+for _t in curl find grep sed awk tar gzip; do have "$_t" || die "필수 명령이 없습니다: $_t"; done
+if ! is_root && [ "$CMD" != "" ] && [ "$CMD" != "status" ]; then
+  log_warn "root 가 아닙니다. 권한/서버 설정/백업 일부가 제한될 수 있습니다."
+fi
+mkdir -p "$WG_STATE_DIR/runs" "$WG_STATE_DIR/sites" 2>/dev/null || die "상태 디렉토리를 만들 수 없습니다: $WG_STATE_DIR (WG_STATE_DIR 로 변경 가능)"
+chmod 700 "$WG_STATE_DIR" 2>/dev/null
+
+case "$CMD" in
+  analyze) cmd_analyze ;;
+  backup) cmd_backup ;;
+  scan) cmd_scan ;;
+  plan) cmd_plan ;;
+  apply) cmd_apply ;;
+  verify) cmd_verify ;;
+  rollback) cmd_rollback ;;
+  restore) cmd_restore ;;
+  report) cmd_report ;;
+  status) cmd_status ;;
+  datacheck|data) cmd_datacheck ;;
+  ai-review|ai) cmd_ai_review ;;
+  ai-test) cmd_ai_test ;;
+  run)
+    cmd_analyze || exit $?
+    OPT_RUN="$RUN_ID"
+    ( cmd_backup ) || die "백업 실패 - 중단합니다"
+    ctx_load
+    cmd_scan || exit $?
+    cmd_plan || exit $?
+    if [ "$OPT_AI" = "1" ]; then OPT_ARGS=(code manual); ( cmd_ai_review ) || log_warn "AI 검토에서 확인할 항목이 있습니다: $RUN_DIR/ai/review.md"; fi
+    if [ "$OPT_APPLY" = "1" ]; then
+      cmd_apply; rc=$?
+      if [ "$OPT_AI" = "1" ]; then OPT_ARGS=(data); ( cmd_ai_review ) || true; fi
+      cmd_report; exit $rc
+    fi
+    cmd_report
+    ;;
+  version|--version|-v) echo "WebGuard $WG_VERSION" ;;
+  ""|help|-h|--help) usage ;;
+  *) echo "알 수 없는 명령: $CMD" >&2; usage; exit 1 ;;
+esac

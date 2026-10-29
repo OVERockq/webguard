@@ -1,0 +1,72 @@
+# WebGuard 설정 (/etc/webguard/webguard.conf) - bash 문법
+# 명령행 옵션이 이 설정보다 우선합니다.
+
+# 실행 기록 / 백업 위치 (반드시 문서루트 밖)
+WG_STATE_DIR=/var/lib/webguard
+WG_BACKUP_DIR=/var/backups/webguard
+
+# 백업에서 제외할 경로 (tar --exclude 패턴, 공백 구분). 예: 캐시 폴더
+#WG_BACKUP_EXCLUDE="*/wp-content/cache/* */files/cache/*"
+
+# 외부 조회 (WordPress 최신버전/코어 체크섬/플러그인 정보, Rhymix·그누보드 최신버전)
+WG_ONLINE=1
+
+# HTTP 검증
+WG_HTTP_TIMEOUT=20        # 요청 타임아웃(초)
+WG_CRAWL_LIMIT=25         # 스모크 테스트 URL 최대 개수
+WG_LOCAL_RESOLVE=1        # 사이트 도메인을 이 서버(127.0.0.1)로 고정 접속 (CDN/프록시 우회)
+#WG_LOCAL_IP=127.0.0.1
+
+# .user.ini 변경 반영 대기 최대 시간(초). PHP 는 user_ini.cache_ttl(기본 300초) 동안 캐시함
+WG_INI_WAIT_MAX=320
+# 1 이면 .user.ini 변경 직후 PHP-FPM 을 reload 하여 즉시 반영
+WG_RELOAD_PHP=0
+
+# 마이그레이션 목표 PHP 버전 (scan 시 호환성 분석)
+#WG_TARGET_PHP=8.3
+
+# 런타임 레이어 (auto_prepend)
+#   요청 가드 모드: block = 차단 규칙 적용 / log = 모두 로그만
+WG_GUARD_MODE=block
+#   패턴별 동작 (log | block). 게시판 본문에 코드가 올라오는 사이트는 log 유지 권장
+WG_GUARD_SQLI=log
+WG_GUARD_XSS=log
+WG_GUARD_LFI=log
+WG_GUARD_UPLOAD=block
+#   mysql_* 호환층 연결 문자셋 (구 mysql 확장 기본값 latin1 → EUC-KR 레거시 데이터 보호)
+WG_MYSQL_CHARSET=latin1
+#   register_globals 에뮬레이션 (보안상 비권장, 레거시 코드가 꼭 필요할 때만 1)
+WG_COMPAT_REGISTER_GLOBALS=0
+
+# ------------------------------------------------------------ 데이터 검증 (datacheck)
+# apply 시 페이지 본문/DB 전후 비교 (0 이면 끔, --no-data-check)
+WG_DATA_CHECK=1
+# 출력이 "완전히 같아야" 하는 작업 (다르면 그 작업만 자동 롤백)
+WG_DATA_STRICT_ACTIONS="php_rewrite runtime"
+# 엄격 비교 허용 변화율(%) - 0 = 정규화 후 완전 일치
+WG_DATA_STRICT_TOL=0
+# 원래 매번 바뀌는 페이지의 최소 허용 변화율(%)
+WG_DATA_DYNAMIC_TOL=10
+# 이 행 수보다 큰 테이블은 COUNT/CHECKSUM 생략
+WG_DATA_DB_MAX_ROWS=2000000
+# DB 읽기 교차검증 시 테이블당 비교 행 수
+WG_DATA_DBREAD_ROWS=200
+# 목표 PHP 내장 서버를 root 로 실행 허용 (웹 계정을 알 수 없을 때만, 비권장)
+#WG_DATA_SERVE_AS_ROOT=0
+
+# ------------------------------------------------------------ AI 검토 (Claude / ChatGPT)
+# 이 파일은 권한 600 으로 두세요 (API 키 포함)
+#WG_AI_PROVIDER=claude            # claude | openai
+#WG_AI_MODEL=claude-opus-5-5      # openai 기본: gpt-5
+#WG_AI_API_KEY=                   # 또는 WG_AI_API_KEY_FILE=/etc/webguard/ai.key, 환경변수 ANTHROPIC_API_KEY / OPENAI_API_KEY
+#WG_AI_API_KEY_FILE=
+#WG_AI_BASE_URL=                  # 프록시/게이트웨이 사용 시 (예: https://llm-gw.example.com)
+#WG_AI_EFFORT=high                # Claude: low|medium|high|xhigh|max, OpenAI: reasoning_effort (비우면 미전송)
+#WG_AI_MAX_ITEMS=40               # 1회 검토 최대 항목 수
+#WG_AI_MAX_CHARS=14000            # 항목당 최대 전송 바이트
+#WG_AI_SEND_PAGE_CONTENT=1        # 0 이면 데이터(페이지 diff) 검토 시 내용 전송 안 함
+#WG_AI_TIMEOUT=300
+#WG_AI_GATE=0                     # 1 이면 apply 시 항상 --ai-gate
+
+# 검사 대상 최대 파일 크기 (바이트)
+WG_MAX_SCAN_SIZE=3000000

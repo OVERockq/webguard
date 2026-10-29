@@ -1,0 +1,3 @@
+dist/
+tests/unit/.fixed.php
+.DS_Store
