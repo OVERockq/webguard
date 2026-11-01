@@ -78,9 +78,11 @@ cmd_apply() {
     js="$(basename "$jd")"
     case "$js" in *.prev-*) continue ;; esac
     [ -f "$jd/ROLLEDBACK" ] && continue
-    [ -n "$(_apply_status "$js")" ] && continue
+    if [ ! -f "$jd/IN_PROGRESS" ] && [ ! -f "$jd/ROLLBACK_FAILED" ] && [ -n "$(_apply_status "$js")" ]; then continue; fi
     log_warn "[$js] 이전 실행이 중단된 작업 발견 → 원상복구"
-    CH_DIR="$jd"; changes_rollback "$js"; _run_hooks "$js"
+    CH_DIR="$jd"
+    changes_rollback "$js" || die "[$js] 중단된 작업 복구 실패 - 저널을 보존하고 적용을 중단합니다: $jd"
+    _run_hooks "$js"
     _apply_record "$js" "$(cut -f1 "$jd/action.tsv" 2>/dev/null)" rolledback "-" "중단된 작업 자동 복구"
   done
 
@@ -112,13 +114,15 @@ cmd_apply() {
     ACT_MSG=""; EXPECT_BLOCK=""; VERIFY_MSG=""
     if ! "act_$act" "$tgt" "$args"; then
       log_err "    적용 실패: ${ACT_MSG:-오류} → 원상복구"
-      changes_rollback "$seq"; _run_hooks "$seq"
+      changes_rollback "$seq" || die "[$seq] 롤백 실패 - 추가 변경을 중단합니다: $CH_DIR"
+      _run_hooks "$seq"
       _apply_record "$seq" "$act" failed "$tgt" "${ACT_MSG:-error}"; fail=$((fail+1)); continue
     fi
     local amsg="$ACT_MSG"
     if ! _post_verify "$seq" "$act" "$tgt" "$args"; then
       log_err "    검증 실패: $VERIFY_MSG → 이 작업을 롤백합니다"
-      changes_rollback "$seq"; _run_hooks "$seq"
+      changes_rollback "$seq" || die "[$seq] 롤백 실패 - 추가 변경을 중단합니다: $CH_DIR"
+      _run_hooks "$seq"
       _apply_record "$seq" "$act" rolledback "$tgt" "$VERIFY_MSG"; fail=$((fail+1)); continue
     fi
     log_ok "    완료${amsg:+: $amsg}"
@@ -126,7 +130,9 @@ cmd_apply() {
       printf '%s\n' "$EXPECT_BLOCK" >"$CH_DIR/expect_block"
       CUM_BLOCK="$(printf '%s\n%s\n' "$CUM_BLOCK" "$EXPECT_BLOCK" | grep -v '^$')"
     fi
-    _apply_record "$seq" "$act" ok "$tgt" "$amsg"; ok=$((ok+1))
+    _apply_record "$seq" "$act" ok "$tgt" "$amsg"
+    rm -f "$CH_DIR/IN_PROGRESS"
+    ok=$((ok+1))
     dc_after_action_ok "$act"
   done 3<<<"$todo"
   dc_apply_end
@@ -146,14 +152,14 @@ cmd_rollback() {
   [ -f "$RUN_DIR/apply.tsv" ] || die "적용 기록이 없습니다"
   local only=",${OPT_ONLY:-},"
   # 성공 적용된 작업을 역순으로
-  local seqs; seqs="$(awk -F'\t' '{st[$1]=$3} END{for (s in st) if (st[s]=="ok") print s}' "$RUN_DIR/apply.tsv" | sort -r)"
+  local seqs; seqs="$(awk -F'\t' '{st[$1]=$3} END{for (s in st) if (st[s]=="ok" || st[s]=="rollback_failed") print s}' "$RUN_DIR/apply.tsv" | sort -r)"
   if [ "$only" != ",," ]; then seqs="$(printf '%s\n' "$seqs" | while read -r s; do case "$only" in *",$s,"*|*",$((10#$s)),"*) echo "$s" ;; esac; done)"; fi
   [ -n "$seqs" ] || { log_warn "되돌릴 작업이 없습니다"; return 0; }
   log_step "롤백"
   printf '%s\n' "$seqs" | while read -r s; do printf '  [%s] %s\n' "$s" "$(cut -f1-2 "$RUN_DIR/changes/$s/action.tsv" 2>/dev/null | tr '\t' ' ')"; done
   confirm "위 작업들을 되돌릴까요?" || die "취소됨"
   wg_lock
-  local s
+  local s rollback_rc=0
   for s in $seqs; do
     CH_DIR="$RUN_DIR/changes/$s"
     if changes_rollback "$s"; then
@@ -161,10 +167,13 @@ cmd_rollback() {
       _apply_record "$s" "$(cut -f1 "$CH_DIR/action.tsv" 2>/dev/null)" rolledback "-" "사용자 롤백"
       log_ok "[$s] 되돌림"
     else
+      rollback_rc=1
+      _apply_record "$s" "$(cut -f1 "$CH_DIR/action.tsv" 2>/dev/null)" rollback_failed "-" "복원 실패 - 재시도 필요"
       log_err "[$s] 일부 파일 복원 실패 - $CH_DIR/journal.tsv 확인 (전체 복원: webguard restore)"
     fi
   done
-  case "$PHP_INI_MODE" in userini) log_info ".user.ini 변경은 최대 ${PROBE_INI_USER_INI_CACHE_TTL:-300}초 후 반영됩니다 (즉시: PHP-FPM reload)";; esac
+  case "${PHP_INI_MODE:-}" in userini) log_info ".user.ini 변경은 최대 ${PROBE_INI_USER_INI_CACHE_TTL:-300}초 후 반영됩니다 (즉시: PHP-FPM reload)";; esac
+  return "$rollback_rc"
 }
 
 cmd_verify() {

@@ -1,0 +1,122 @@
+{
+  "home": {
+    "title": "WebGuard",
+    "headline": "오래된 웹사이트에,\n다음 시간을 연결합니다.",
+    "lead": "운영 중인 PHP 사이트의 보안 점검과 버전 전환을 하나의 검증 흐름으로 연결합니다.",
+    "body_title": "서두르지 않는 변화",
+    "body": "환경을 파악하고, 원본을 보관하고, 작은 변경을 확인합니다. WebGuard는 레거시 서비스를 이해하는 것에서 출발합니다.",
+    "sections": [
+      {
+        "label": "01 / OBSERVE",
+        "title": "지금의 환경을 정확하게",
+        "text": "웹서버와 PHP 버전, CMS, 문자셋과 기준 응답을 수집합니다."
+      },
+      {
+        "label": "02 / CHANGE",
+        "title": "작게 적용하고 확인하기",
+        "text": "검토한 계획에 따라 작업별로 변경하고 응답과 오류를 비교합니다."
+      },
+      {
+        "label": "03 / RECOVER",
+        "title": "되돌아갈 경로 확보",
+        "text": "변경 저널과 원본을 남기고 작업 단위 롤백을 지원합니다."
+      }
+    ]
+  },
+  "features": {
+    "title": "CAPABILITIES",
+    "headline": "보안과 호환성,\n같은 화면에서.",
+    "lead": "취약 경로부터 오래된 PHP 문법까지. 사이트를 구성하는 여러 층을 함께 점검합니다.",
+    "body_title": "점검부터 복구까지",
+    "body": "사이트 종류와 서버 환경에 따라 적용 가능한 작업이 달라집니다. 자동 적용 계획과 수동 조치 목록을 검토한 뒤 진행하세요.",
+    "sections": [
+      {
+        "label": "SECURITY",
+        "title": "노출과 실행 경로 점검",
+        "text": ".git, 덤프, 백업 파일과 업로드 폴더의 PHP 실행 가능성을 확인합니다."
+      },
+      {
+        "label": "COMPATIBILITY",
+        "title": "PHP 마이그레이션 지원",
+        "text": "토큰 기반 문법 변환과 mysql_* 등 구버전 API 호환 레이어를 제공합니다."
+      },
+      {
+        "label": "EVIDENCE",
+        "title": "페이지와 데이터 비교",
+        "text": "응답 본문과 DB 체크섬, 구·신 PHP 읽기 결과를 비교합니다. 모든 기능의 동등성을 보장하지는 않습니다."
+      }
+    ]
+  },
+  "workflow": {
+    "title": "WORKFLOW",
+    "headline": "변경에는 언제나\n확인할 근거가 필요합니다.",
+    "lead": "분석 → 백업 → 검사 → 계획 → 적용 → 검증. 각 단계의 기록이 다음 판단의 근거가 됩니다.",
+    "body_title": "운영 적용의 전제",
+    "body": "스테이징 검증과 별도 백업을 준비하세요. HTTP 응답이 같더라도 로그인, 글쓰기, 결제 등 업무 흐름은 별도로 확인해야 합니다.",
+    "sections": [
+      {
+        "label": "01—02",
+        "title": "환경 분석 · 원본 백업",
+        "text": "실제 PHP 환경을 확인하고 문서루트와 서버 설정, 가능한 DB 덤프를 보관합니다."
+      },
+      {
+        "label": "03—04",
+        "title": "검사 · 변경 계획",
+        "text": "발견 사항을 분류하고 plan.tsv에서 적용할 작업을 선택합니다."
+      },
+      {
+        "label": "05—06",
+        "title": "적용 · 검증 · 롤백",
+        "text": "작업별 문법 검사와 스모크 테스트를 수행하고, 확인된 실패 시 해당 작업을 되돌립니다."
+      }
+    ]
+  },
+  "guide": {
+    "title": "FIELD GUIDE",
+    "headline": "처음 실행하기 전,\n읽어야 할 것들.",
+    "lead": "작은 복제 환경에서 시작하세요. 계획 파일과 실제 응답을 확인한 뒤 적용 범위를 결정합니다.",
+    "body_title": "시작할 준비가 되었나요?",
+    "body": "Linux와 Bash 4 이상이 필요하며 PHP CLI와 DB 백업 도구 사용을 권장합니다. 아래 명령의 경로와 URL은 실제 테스트 환경에 맞게 변경하세요.",
+    "sections": [
+      {
+        "label": "STEP 01",
+        "title": "복제본에서 계획 만들기",
+        "text": "webguard run --root /var/www/staging --url http://staging.local --target-php 8.3 --offline"
+      },
+      {
+        "label": "STEP 02",
+        "title": "계획 검토 후 적용",
+        "text": "webguard apply --root /var/www/staging --dry-run"
+      },
+      {
+        "label": "STEP 03",
+        "title": "응답 확인과 복원 준비",
+        "text": "webguard verify --root /var/www/staging"
+      }
+    ]
+  },
+  "inquiries": {
+    "title": "COMMUNITY / SUPPORT",
+    "headline": "궁금한 점을\n함께 정리하는 공간.",
+    "lead": "도입과 사용에 관한 질문을 남겨주세요. 문의는 관리자 확인 후 공개됩니다.",
+    "body_title": "문의 전 확인해주세요",
+    "body": "비밀번호, API 키, 고객 개인정보, 운영 서버 접속정보를 작성하지 마세요. 공개된 문의는 누구나 읽을 수 있습니다.",
+    "sections": [
+      {
+        "label": "BEFORE YOU ASK",
+        "title": "상황을 구체적으로",
+        "text": "PHP 버전, CMS 종류와 재현 절차를 알려주시면 문제를 이해하는 데 도움이 됩니다."
+      },
+      {
+        "label": "PRIVACY",
+        "title": "공개 전 관리자 확인",
+        "text": "접수된 문의는 바로 공개되지 않습니다. 관리자 승인 후 게시판에 표시됩니다."
+      },
+      {
+        "label": "SCOPE",
+        "title": "실제 데이터 대신 예제",
+        "text": "민감한 로그 원문 대신 비밀정보를 지운 최소 재현 예제를 남겨주세요."
+      }
+    ]
+  }
+}

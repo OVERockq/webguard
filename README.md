@@ -27,25 +27,46 @@ WordPress, 제로보드4, XpressEngine, Rhymix, 그누보드4/5, 직접 만든 P
 
 ## 1. 설치
 
-### 배포 서버에서 받아 설치 (권장)
+### GitHub에서 직접 받아 설치 (권장)
+
+공식 저장소: [OVERockq/webguard](https://github.com/OVERockq/webguard)
 
 ```bash
-# (관리 PC) 배포 패키지 생성 → dist/ 의 파일을 배포 서버의 /webguard/ 경로에 업로드
-tools/build-dist.sh https://dist.example.com/webguard
-
-# (대상 서버)
-curl -fsSL https://dist.example.com/webguard/install.sh | sudo bash
-# 특정 버전:  ... | sudo bash -s -- --version 1.0.0
+git clone https://github.com/OVERockq/webguard.git
+cd webguard
+# 설치 스크립트와 소스를 검토한 뒤 로컬 설치
+sudo bash install.sh --local
 ```
 
-`install.sh`는 패키지의 sha256 체크섬을 확인한 뒤 `/opt/webguard/releases/<버전>`에 설치하고 `/usr/local/bin/webguard`를 연결합니다.
-압축을 직접 푼 경우에는 `sudo ./install.sh --local`을 실행하면 됩니다.
+Git 없이 받으려면 설치 스크립트를 먼저 저장하고 검토한 뒤 실행합니다.
+기본적으로 같은 GitHub 저장소의 `main` 소스 아카이브를 내려받습니다.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/OVERockq/webguard/main/install.sh -o webguard-install.sh
+less webguard-install.sh
+sudo bash webguard-install.sh
+# 특정 태그 또는 커밋은 --ref <태그 또는 커밋 SHA> 로 지정
+```
+
+`main`은 변경될 수 있으므로 같은 소스를 재설치하려면 커밋 SHA를 지정하세요.
+GitHub 직접 다운로드는 HTTPS를 사용하며, 별도 서명 검증을 제공하지 않습니다.
+신뢰할 수 있는 SHA-256 값이 있으면 `--sha256 <값>`으로 아카이브를 검증할 수 있습니다.
+
+`install.sh`는 `/opt/webguard/releases/<버전>`에 실행에 필요한 파일만 설치하고
+`/usr/local/bin/webguard`를 연결합니다. Git 이력, 테스트, 예제 사이트와 로컬 설정은
+설치하지 않으며, 같은 버전의 기존 설치는 `.previous.*` 디렉토리에 보존합니다.
+압축을 직접 풀었다면 해당 디렉토리에서 `sudo bash install.sh --local`을 실행하세요.
+
+별도 배포 서버 방식도 기존처럼 지원합니다.
+`tools/build-dist.sh https://dist.example.com/webguard`로 패키지를 만들고,
+`sudo bash webguard-install.sh --url https://dist.example.com/webguard`로 설치하면
+해당 서버의 패키지 SHA-256을 확인합니다. 패키지 생성만으로 업로드하지는 않습니다.
 
 ### 요구사항
 
 | 구분 | 내용 |
 |---|---|
-| 필수 | Linux, bash 4+, curl, tar, gzip, find/grep/sed/awk (GNU) |
+| 필수 | Linux, bash 4+, curl, tar, gzip, find/grep/sed/awk (GNU), Git(저장소 복제 방식) |
 | 권장 | PHP CLI (문법검사·호환성 변환), mysqldump (DB 백업), unzip (WordPress 코어 복원) |
 | 권한 | root 권장 (서버 설정 백업/변경, 다른 계정 소유 파일 처리) |
 
@@ -288,6 +309,12 @@ webguard ai-review all --root ... --ai-dry-run         # 보낼 내용만 만들
 ## 10. 개발/테스트
 
 ```bash
+# 복원 실패·재시도 중단·헤더·Docker 실패 회귀
+bash tests/unit/safety_unit.sh
+
+# 설치 검사: 시스템 경로에 쓰므로 폐기 가능한 Docker 컨테이너에서만 실행
+docker run --rm -v "$PWD":/wg:ro wglegacy-php83 bash /wg/tests/unit/install_unit.sh
+
 # 토큰 변환기 회귀 테스트 (PHP 5.6 / 8.3 출력 동일성)
 tests/unit/run-unit.sh
 
@@ -315,3 +342,35 @@ tests/docker/wordpress/run-test.sh
 - **ikkcu** — [https://www.ikkcu.com](https://www.ikkcu.com)
 - 저장소: [github.com/OVERockq/webguard](https://github.com/OVERockq/webguard)
 - 버그 제보·기능 제안: [GitHub Issues](https://github.com/OVERockq/webguard/issues)
+
+## 13. 보완 작업 결과 및 적용 영향 보고서
+
+2026-11-02 로컬 보완에서 기존 보안 헤더 덮어쓰기, 롤백 실패의 잘못된 완료 표시,
+재시도 중 중단 복구 누락, 테스트 실패의 PASS 오판과 배포 파일 포함 범위를 수정했습니다.
+권장 설치는 [GitHub 저장소](https://github.com/OVERockq/webguard)에서 직접 받는 방식으로 변경했습니다.
+운영 배포는 수행하지 않았으며 Git 반영 상태는 해당 커밋·원격 브랜치를 기준으로 확인하세요.
+
+| 실행 시 영향을 주는 부분 | 이번 보완 / 검토할 내용 |
+| --- | --- |
+| 보안 헤더 | 기존 앱 헤더를 확인해 없는 항목만 추가. 재적용 시 이전 WebGuard 관리 블록도 다시 확인 |
+| PHP 파일·설정 | 소스 변환, 런타임 호환층, auto_prepend, 세션·문자셋·오류 표시 설정은 선택한 계획에 따라 실제 동작에 영향 |
+| WordPress | wp-config 상수·인증 솔트·변조 코어 파일 복원 및 접근 차단은 로그인·편집·업로드·연동에 영향 가능 |
+| 롤백·재실행 | 복원 실패 시 완료로 표시하지 않고 적용 중단. 미완료 작업을 먼저 복원하고 재시도 |
+| 설치·패키징 | 필요한 실행 파일만 설치. 같은 버전 재설치 시 이전 디렉토리 보존 |
+
+상세 설명과 관련 코드 링크:
+
+- [전체 보완 결과 및 검증 보고서](docs/patch-impact.md)
+- [PHP 코드 변환·런타임·설정의 영향](docs/patch-impact.md#php-impact)
+- [WordPress 설정·솔트·코어 복원의 영향](docs/patch-impact.md#wordpress-impact)
+- [GitHub 설치·재설치와 파일 포함 범위](docs/patch-impact.md#installation)
+- [검증 결과 및 향후 적용 전후 확인 절차](docs/patch-impact.md#verification)
+
+검증 결과: PHP 5.6/8.3 출력 비교 통과, AI 모의 검사 33개 통과, CMS 모의 검사 43개 및
+그 안의 기능·보안 검사 26개 통과, WordPress 통합 검사 20개 통과. 설치·배포물 제외 검사와
+롤백 실패·재시도 중단 복구 회귀도 통과했습니다. GitHub 설치의 네트워크 전송은 모의 검사입니다.
+
+검증된 사례가 모든 사이트에서의 동작 보장을 뜻하지는 않습니다.
+특히 PHP mb_* 함수의 구·신 버전 결과 차이, WordPress 플러그인·테마와 업무별 POST 흐름은
+별도로 확인해야 합니다. 솔트 재생성은 사용자 재로그인을 유발하고, 코어 복원은 직접 수정한
+코어 코드를 교체할 수 있습니다. 적용 전 해당 영향 설명과 실제 plan.tsv를 함께 검토하세요.

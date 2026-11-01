@@ -1,0 +1,35 @@
+services:
+  db:
+    image: mariadb:10.6
+    environment:
+      MARIADB_ROOT_PASSWORD: test-root-only
+      MARIADB_DATABASE: zbdb
+      MARIADB_USER: zbuser
+      MARIADB_PASSWORD: zbpass123
+    command: ["--character-set-server=latin1", "--collation-server=latin1_swedish_ci"]
+    volumes:
+      - ../legacy/seed.sql:/docker-entrypoint-initdb.d/seed.sql:ro
+  asis:
+    image: wglegacy-php56
+    depends_on: [db]
+    ports: ["127.0.0.1::80"]
+    volumes:
+      - ${WG_LAB}/asis:/var/www/html:ro
+      - ../legacy/php56-legacy.ini:/usr/local/etc/php/conf.d/legacy.ini:ro
+  work:
+    image: wglegacy-php56
+    depends_on: [db]
+    ports: ["127.0.0.1::80"]
+    volumes:
+      - ${WG_LAB}/work:/var/www/html
+      - ../../..:/opt/webguard:ro
+      - ../legacy/php56-legacy.ini:/usr/local/etc/php/conf.d/legacy.ini:ro
+    command: ["bash", "-c", "a2enmod headers rewrite >/dev/null && sed -i 's/AllowOverride None/AllowOverride All/g' /etc/apache2/apache2.conf && touch /var/log/php_errors.log && chmod 666 /var/log/php_errors.log && exec apache2-foreground"]
+  tobe:
+    image: wglegacy-php83
+    depends_on: [db]
+    ports: ["127.0.0.1::80"]
+    volumes:
+      - ${WG_LAB}/work:/var/www/html:ro
+      - ../../..:/opt/webguard:ro
+    command: ["bash", "-c", "a2enmod headers rewrite >/dev/null && sed -i 's/AllowOverride None/AllowOverride All/g' /etc/apache2/apache2.conf && exec apache2-foreground"]
