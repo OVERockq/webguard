@@ -55,6 +55,7 @@ _post_verify() { # seq action target args
 
 cmd_apply() {
   ctx_load
+  [ -z "${DIAGNOSTIC_MODE:-}" ] || die "진단 기록으로 apply 할 수 없습니다. 별도 run으로 백업·계획을 생성하세요"
   [ -f "$RUN_DIR/plan.tsv" ] || die "계획이 없습니다. 먼저 'webguard plan' 을 실행하세요"
   if [ -z "${BACKUP_PATH:-}" ] || [ ! -f "${BACKUP_PATH}/backup.ok" ]; then
     [ "${OPT_NO_BACKUP:-0}" = "1" ] || die "백업이 없습니다. 먼저 'webguard backup' 을 실행하세요 (--i-have-backup 으로 생략 가능)"
@@ -229,6 +230,11 @@ cmd_report() {
     echo "- 대상: \`$DOCROOT\` ${SITE_URL:+($SITE_URL)}"
     echo "- 실행 ID: \`$RUN_ID\` / 생성: $(date '+%F %T') / WebGuard $WG_VERSION"
     echo
+    if [ -n "${DIAGNOSTIC_MODE:-}" ]; then
+      echo "- 진단 전용: $DIAGNOSTIC_MODE (패치·백업 미수행, apply 불가)"
+      echo '- 생략 항목과 영향: [diagnosis.md](diagnosis.md)'
+      echo
+    fi
     echo "## 1. 환경"
     echo; echo '```'; cat "$RUN_DIR/environment.txt" 2>/dev/null; echo '```'; echo
     echo "## 2. 발견 사항"
@@ -279,11 +285,20 @@ cmd_report() {
       awk -F'\t' '{ m=($4=="ok"?"✅":($4=="warn"?"⚠️":($4=="fail"?"❌":"·"))); printf "  - %s %s `%s` %s\n", m, $2, $3, $6 }' "$RUN_DIR/ai/review.tsv"
     else echo "(실행 안 함 - \`webguard ai-review\`)"; fi
     echo
-    echo "## 7. 복구 방법"
-    echo
-    echo "- 작업 단위 되돌리기: \`webguard rollback --run $RUN_ID [--only 번호]\`"
-    echo "- 전체 파일 복원: \`webguard restore --run $RUN_ID\` (백업: ${BACKUP_PATH:-없음})"
-    echo "- 격리된 파일: \`$WG_STATE_DIR/quarantine/$RUN_ID/\`"
+    if [ -n "${DIAGNOSTIC_MODE:-}" ]; then
+      echo '## 7. 진단 후 다음 단계'
+      echo
+      echo '- 파일 격리·코드·설정 패치를 수행하지 않아 파일 롤백 대상이 없습니다.'
+      echo '- 진단 상세와 미확인 항목: [diagnosis.md](diagnosis.md)'
+      echo '- 조치 권고: [recommendations.tsv](recommendations.tsv)'
+      echo '- 실제 보완은 별도 run으로 백업과 계획을 생성한 뒤 검토하세요.'
+    else
+      echo "## 7. 복구 방법"
+      echo
+      echo "- 작업 단위 되돌리기: \`webguard rollback --run $RUN_ID [--only 번호]\`"
+      echo "- 전체 파일 복원: \`webguard restore --run $RUN_ID\` (백업: ${BACKUP_PATH:-없음})"
+      echo "- 격리된 파일: \`$WG_STATE_DIR/quarantine/$RUN_ID/\`"
+    fi
   } >"$out"
   log_ok "보고서: $out"
 }

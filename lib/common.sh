@@ -123,6 +123,7 @@ ctx_new() {
   DOCROOT="$(cd "$OPT_ROOT" && pwd -P)"
   SITE="${OPT_SITE:-$(site_name_from_root "$DOCROOT")}"
   RUN_ID="$(date +%Y%m%d-%H%M%S)-${SITE}"
+  [ "${CMD:-}" = diagnose ] && RUN_ID="${RUN_ID}-diag-$(rand_hex 3)"
   RUN_DIR="${WG_STATE_DIR}/runs/${RUN_ID}"
   mkdir -p "$RUN_DIR" "${WG_STATE_DIR}/sites/${SITE}" || die "상태 디렉토리 생성 실패: $RUN_DIR"
   chmod 700 "$WG_STATE_DIR" "$RUN_DIR" 2>/dev/null
@@ -198,6 +199,7 @@ _curl_resolve_args() {
 
 # http_fetch <경로 또는 URL> <본문저장파일> [헤더저장파일] [메서드] → stdout: HTTP 상태코드 (실패 시 000)
 http_fetch() {
+  [ "${WG_DIAGNOSTIC_PASSIVE:-0}" = 1 ] && { printf 000; return 0; }
   local path="$1" out="$2" hdr="${3:-/dev/null}" method="${4:-GET}" url
   case "$path" in http://*|https://*) url="$path" ;; *) url="${SITE_URL}/${path#/}" ;; esac
   local -a args
@@ -207,7 +209,7 @@ http_fetch() {
   curl "${args[@]}" "$url" 2>/dev/null || true
 }
 
-http_available() { [ -n "${SITE_URL:-}" ] && have curl && [ "${HTTP_OK:-0}" = "1" ]; }
+http_available() { [ "${WG_DIAGNOSTIC_PASSIVE:-0}" != 1 ] && [ -n "${SITE_URL:-}" ] && have curl && [ "${HTTP_OK:-0}" = "1" ]; }
 
 # URL 경로 (문서루트 기준 상대경로 → /a/b.php)
 url_path_of() { local rel="${1#"$DOCROOT"}"; rel="${rel#/}"; printf '/%s' "$rel"; }

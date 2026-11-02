@@ -74,6 +74,25 @@ GitHub 직접 다운로드는 HTTPS를 사용하며, 별도 서명 검증을 제
 
 ## 2. 빠른 사용법
 
+### 패치 없이 먼저 진단하기
+
+```bash
+# 기본: 사이트 파일 읽기만. HTTP·임시 프로브·외부 조회 없음
+sudo webguard diagnose --root /var/www/html --target-php 8.3
+
+# 실제 웹 PHP·응답까지 점검 (HTTP 요청과 임시 파일이 발생할 수 있음)
+sudo webguard diagnose --root /var/www/html --url http://localhost --active
+```
+
+진단은 백업·패치·AI 전송·서비스 재시작을 수행하지 않고, 결과를 별도
+`/var/lib/webguard/diagnostics/`에 보관합니다. 기존 패치 실행의 latest는 유지합니다.
+`diagnosis.md`에서 생략·미확인 항목을, `report.md`와 `recommendations.tsv`에서 발견 사항·조치 권고를 확인하세요.
+진단 기록은 apply할 수 없으며 실제 보완은 아래 run 절차를 사용합니다.
+기본 모드는 실제 노출·웹 PHP 설정을 확인하지 못하고, 활성 모드의 요청은 로그·세션·DB를 바꿀 수 있습니다.
+자세한 사용법·영향·제한은 [진단 모드 설명](docs/diagnostic-mode.md)을 참고하세요.
+
+### 백업·계획을 만들고 적용하기
+
 ```bash
 # 1) 분석 + 백업 + 검사 + 계획 (사이트는 변경하지 않음)
 sudo webguard run --root /var/www/html --url https://example.com
@@ -309,6 +328,10 @@ webguard ai-review all --root ... --ai-dry-run         # 보낼 내용만 만들
 ## 10. 개발/테스트
 
 ```bash
+# 진단 모드: 무요청·무패치·기존 실행 분리 및 Docker 실측
+bash tests/unit/diagnose_unit.sh
+python3 tests/docker/diagnose/run-test.py
+
 # 복원 실패·재시도 중단·헤더·Docker 실패 회귀
 bash tests/unit/safety_unit.sh
 
@@ -374,3 +397,14 @@ tests/docker/wordpress/run-test.sh
 특히 PHP mb_* 함수의 구·신 버전 결과 차이, WordPress 플러그인·테마와 업무별 POST 흐름은
 별도로 확인해야 합니다. 솔트 재생성은 사용자 재로그인을 유발하고, 코어 복원은 직접 수정한
 코어 코드를 교체할 수 있습니다. 적용 전 해당 영향 설명과 실제 plan.tsv를 함께 검토하세요.
+
+### 진단 모드 추가 결과
+
+패치 없는 `diagnose` 명령을 추가했습니다. 기본은 파일 읽기만 수행하고, `--active --url`을
+명시하면 실제 웹 응답·임시 프로브를 사용합니다. 두 모드 모두 외부 최신버전 조회·AI 전송·백업·패치·재시작을
+수행하지 않습니다. 기존 실행 기록과 분리하며 진단 기록을 통한 apply도 차단합니다.
+기본·활성 모드의 영향과 결과 파일, 테스트 범위는 [진단 모드 문서](docs/diagnostic-mode.md)에 기록했습니다.
+
+진단 Docker 검사 23/23과 읽기 전용 문서루트 회귀를 통과했습니다.
+기존 CMS 모의 패치 43/43 및 내부 기능 검사 26/26, 안전성·설치 회귀도 통과했습니다.
+검수에서는 정상 패치 상태와의 분리, 진단 기록 apply 거부, 충돌 옵션과 출력 경로 검증을 확인했습니다.
