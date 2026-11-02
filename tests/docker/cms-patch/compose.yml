@@ -1,0 +1,13 @@
+services:
+  cms:
+    image: wglegacy-php83
+    env_file: [../../../legacy/webpage/.env]
+    environment:
+      WG_CMS_DATA_DIR: /var/lib/webguard-cms
+    ports: ["127.0.0.1::80"]
+    volumes:
+      - ${WG_PATCH_LAB}/public:/var/www/html
+      - ${WG_PATCH_LAB}/src:/var/www/src:ro
+      - ${WG_PATCH_LAB}/data:/var/lib/webguard-cms
+      - ../../..:/opt/webguard:ro
+    command: ["bash", "-c", "chown -R www-data:www-data /var/lib/webguard-cms /var/www/html && chmod 700 /var/lib/webguard-cms && a2enmod headers rewrite >/dev/null && sed -i 's/AllowOverride None/AllowOverride All/g' /etc/apache2/apache2.conf && exec apache2-foreground"]

@@ -1,0 +1,15 @@
+services:
+  cms:
+    image: wglegacy-php83
+    ports: ["127.0.0.1::80"]
+    environment:
+      WG_CMS_DATA_DIR: /var/lib/webguard-cms
+      WG_CMS_ADMIN_PASSWORD_HASH: ${WG_CMS_ADMIN_PASSWORD_HASH:-}
+      WG_CMS_IP_SALT: ${WG_CMS_IP_SALT:-local-development}
+    volumes:
+      - ./public:/var/www/html:ro
+      - ./src:/var/www/src:ro
+      - cms-data:/var/lib/webguard-cms
+    command: ["bash", "-c", "chown www-data:www-data /var/lib/webguard-cms && chmod 700 /var/lib/webguard-cms && exec apache2-foreground"]
+volumes:
+  cms-data:

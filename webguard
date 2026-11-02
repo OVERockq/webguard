@@ -9,7 +9,7 @@ while [ -L "$_self" ]; do _l="$(readlink "$_self")"; case "$_l" in /*) _self="$_
 WG_HOME="$(cd "$(dirname "$_self")" && pwd -P)"
 export WG_HOME
 
-for _lib in common changes detect backup scan rules/cms rules/compat plan actions datacheck ai apply; do
+for _lib in common changes detect backup scan rules/cms rules/compat plan actions datacheck ai apply diagnose; do
   # shellcheck disable=SC1090
   . "$WG_HOME/lib/$_lib.sh" || { echo "라이브러리 로드 실패: $_lib" >&2; exit 1; }
 done
@@ -22,6 +22,7 @@ WebGuard $WG_VERSION - 웹사이트 보안 점검/패치 도구
 
 명령:
   run        분석 → 백업 → 검사 → 계획까지 한 번에 실행 (적용은 하지 않음, --apply 시 적용까지)
+  diagnose   패치 없는 진단 (기본: 파일 읽기만, --active --url 지정 시 웹 실측)
   analyze    서버/PHP/웹서버/CMS 환경 분석 및 기준 응답 수집 (새 실행 ID 생성)
   backup     문서루트·서버설정·DB 백업 (+체크섬/권한 목록)
   scan       취약점 검사
@@ -57,6 +58,7 @@ WebGuard $WG_VERSION - 웹사이트 보안 점검/패치 도구
   --dry-run            apply 미리보기
   --yes, -y            확인 질문 없이 진행
   --apply              run 명령에서 계획까지 마친 후 적용까지 진행
+  --active             diagnose 에서 HTTP 요청·임시 프로브 허용 (진단 기본값은 비활성)
   --offline            외부 조회(WordPress 체크섬/최신버전 등) 안 함
   --reload-php         .user.ini 변경 후 PHP-FPM 을 reload 하여 즉시 반영 (기본: 캐시 만료 대기)
   --i-have-backup      apply 시 백업 확인 생략 (비권장)
@@ -73,6 +75,8 @@ WebGuard $WG_VERSION - 웹사이트 보안 점검/패치 도구
   --verbose, --debug
 
 예:
+  webguard diagnose --root /var/www/html
+  webguard diagnose --root /var/www/html --url http://localhost --active
   webguard run --root /var/www/html --url https://example.com
   vi /var/lib/webguard/sites/var_www_html/latest/plan.tsv     # 필요시 y/n 조정
   webguard apply --root /var/www/html
@@ -85,6 +89,7 @@ EOF
 OPT_ROOT=""; OPT_URL=""; OPT_SITE=""; OPT_RUN=""; OPT_TARGET_PHP=""; OPT_TARGET_PHP_BIN=""; OPT_PHP_BIN=""
 OPT_URLS_FILE=""; OPT_ONLY=""; OPT_DRY_RUN=0; OPT_APPLY=0; OPT_NO_BACKUP=0
 OPT_LABEL=""; OPT_TARGET_URL=""; OPT_AI=0; OPT_AI_PROVIDER=""; OPT_AI_MODEL=""; OPT_AI_DRY_RUN=0; OPT_AI_GATE=0
+OPT_ACTIVE=0
 OPT_ARGS=()
 CMD="${1:-}"; [ $# -gt 0 ] && shift
 while [ $# -gt 0 ]; do
@@ -101,6 +106,7 @@ while [ $# -gt 0 ]; do
     --config) WG_CONFIG="$2"; shift ;;
     --dry-run) OPT_DRY_RUN=1 ;;
     --apply) OPT_APPLY=1 ;;
+    --active) OPT_ACTIVE=1 ;;
     -y|--yes) WG_YES=1 ;;
     --offline) WG_ONLINE_OVERRIDE=0 ;;
     --reload-php) WG_RELOAD_PHP=1 ;;
@@ -127,6 +133,11 @@ wg_load_config
 [ -n "${WG_ONLINE_OVERRIDE:-}" ] && WG_ONLINE="$WG_ONLINE_OVERRIDE"
 [ -n "${WG_DATA_CHECK_OVERRIDE:-}" ] && WG_DATA_CHECK="$WG_DATA_CHECK_OVERRIDE"
 [ "${WG_AI_GATE:-0}" = 1 ] && OPT_AI_GATE=1
+if [ "$CMD" = diagnose ]; then
+  diagnose_validate
+elif [ "$OPT_ACTIVE" = 1 ]; then
+  die "--active 는 diagnose 전용 옵션입니다"
+fi
 for _t in curl find grep sed awk tar gzip; do have "$_t" || die "필수 명령이 없습니다: $_t"; done
 if ! is_root && [ "$CMD" != "" ] && [ "$CMD" != "status" ]; then
   log_warn "root 가 아닙니다. 권한/서버 설정/백업 일부가 제한될 수 있습니다."
@@ -135,6 +146,7 @@ mkdir -p "$WG_STATE_DIR/runs" "$WG_STATE_DIR/sites" 2>/dev/null || die "상태 �
 chmod 700 "$WG_STATE_DIR" 2>/dev/null
 
 case "$CMD" in
+  diagnose) cmd_diagnose ;;
   analyze) cmd_analyze ;;
   backup) cmd_backup ;;
   scan) cmd_scan ;;

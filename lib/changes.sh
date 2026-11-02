@@ -16,6 +16,7 @@ changes_begin() {
   mkdir -p "$CH_DIR/files"
   : >"$CH_DIR/journal.tsv"
   : >"$CH_DIR/touched.lst"
+  : >"$CH_DIR/IN_PROGRESS"
 }
 
 _ch_tracked() { grep -qF "	$1	" "$CH_DIR/journal.tsv" 2>/dev/null; }
@@ -103,25 +104,34 @@ ch_quarantine() {
 changes_rollback() {
   local seq="$1" dir="$RUN_DIR/changes/$1"
   [ -f "$dir/journal.tsv" ] || return 0
-  local kind p existed bk mode uid gid ok=0
+  rm -f "$dir/ROLLEDBACK"
+  local kind p existed bk mode uid gid st ok=0
   while IFS=$'\t' read -r kind p existed bk st; do
     mode="$(echo "$st" | awk '{print $1}')"; uid="$(echo "$st" | awk '{print $2}')"; gid="$(echo "$st" | awk '{print $3}')"
     case "$kind" in
       f)
         if [ "$existed" = "1" ]; then
           local tmp; tmp="$(mktemp "$(dirname "$p")/.wg-rb.XXXXXX" 2>/dev/null)" || { mkdir -p "$(dirname "$p")"; tmp="$(mktemp "$(dirname "$p")/.wg-rb.XXXXXX")"; }
-          cp -p "$dir/$bk" "$tmp" && mv -f "$tmp" "$p" || ok=1
-          chmod "$mode" "$p" 2>/dev/null; is_root && chown "$uid:$gid" "$p" 2>/dev/null
+          if ! cp -p "$dir/$bk" "$tmp" || ! mv -f "$tmp" "$p"; then
+            rm -f "$tmp"; ok=1; continue
+          fi
+          chmod "$mode" "$p" 2>/dev/null || ok=1
+          if is_root; then chown "$uid:$gid" "$p" 2>/dev/null || ok=1; fi
         else
-          rm -f "$p"
+          rm -f "$p" || ok=1
         fi ;;
       m)
         chmod "$mode" "$p" 2>/dev/null || ok=1
-        is_root && chown "$uid:$gid" "$p" 2>/dev/null ;;
+        if is_root; then chown "$uid:$gid" "$p" 2>/dev/null || ok=1; fi ;;
       d)
         rmdir "$p" 2>/dev/null || true ;;
     esac
   done < <(awk '{a[NR]=$0} END{for(i=NR;i>0;i--) print a[i]}' "$dir/journal.tsv")
+  if [ "$ok" != 0 ]; then
+    : >"$dir/ROLLBACK_FAILED"
+    return "$ok"
+  fi
+  rm -f "$dir/IN_PROGRESS" "$dir/ROLLBACK_FAILED"
   echo "rolledback $(date '+%F %T')" >"$dir/ROLLEDBACK"
   return $ok
 }

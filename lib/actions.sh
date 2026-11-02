@@ -104,17 +104,35 @@ act_htaccess_options_verify() {
   rm -f "$tmp"
 }
 
+# Probe application headers without our own block, then add only missing defaults.
 act_security_headers() {
-  local nosniff=1; [ "$2" = "nosniff=0" ] && nosniff=0
+  local nosniff=1 h code hd
+  [ "$2" = "nosniff=0" ] && nosniff=0
+  http_available || { ACT_MSG="기존 헤더 확인 불가"; return 1; }
+  h="$(mktemp "$RUN_DIR/headers.XXXX")" || return 1
+  # Rebuild an old managed block so an earlier override does not hide app policies.
+  if block_has "$DOCROOT/.htaccess" headers; then
+    printf '' | block_set "$DOCROOT/.htaccess" headers top "#" || { rm -f "$h"; return 1; }
+  fi
+  code="$(http_fetch / /dev/null "$h")"
+  if [ "$code" = 000 ] || [ ! -s "$h" ]; then rm -f "$h"; ACT_MSG="보안 헤더 조회 실패"; return 1; fi
   {
     echo '<IfModule mod_headers.c>'
-    echo '  Header set X-Frame-Options "SAMEORIGIN"'
-    [ "$nosniff" = 1 ] && echo '  Header set X-Content-Type-Options "nosniff"'
-    echo '  Header set Referrer-Policy "strict-origin-when-cross-origin"'
+    for hd in X-Frame-Options X-Content-Type-Options Referrer-Policy; do
+      [ "$hd" = X-Content-Type-Options ] && [ "$nosniff" = 0 ] && continue
+      if ! grep -qi "^$hd:" "$h"; then
+        case "$hd" in
+          X-Frame-Options) echo '  Header set X-Frame-Options "SAMEORIGIN"' ;;
+          X-Content-Type-Options) echo '  Header set X-Content-Type-Options "nosniff"' ;;
+          Referrer-Policy) echo '  Header set Referrer-Policy "strict-origin-when-cross-origin"' ;;
+        esac
+      fi
+    done
     echo '  Header unset X-Powered-By'
     echo '  Header always unset X-Powered-By'
     echo '</IfModule>'
   } | block_set "$DOCROOT/.htaccess" headers top "#"
+  local rc=$?; rm -f "$h"; return "$rc"
 }
 act_security_headers_verify() {
   local tmp; tmp="$(mktemp "$RUN_DIR/v.XXXX")"

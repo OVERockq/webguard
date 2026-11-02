@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # WebGuard 설치 스크립트
 #
-#   배포 서버에서 받아 설치 (권장):
-#     curl -fsSL https://<배포서버>/webguard/install.sh | sudo bash
-#     curl -fsSL https://<배포서버>/webguard/install.sh | sudo bash -s -- --version 1.0.0
-#   압축을 푼 디렉토리에서 설치:
-#     sudo ./install.sh --local
-#   제거 (실행 기록/백업은 남김):
-#     sudo ./install.sh --uninstall
+#   GitHub에서 직접 설치:
+#     curl -fsSL https://raw.githubusercontent.com/OVERockq/webguard/main/install.sh -o install.sh
+#     sudo bash install.sh
+#   Git clone 후 로컬 설치 (권장): sudo bash install.sh --local
+#   GitHub 태그/커밋 지정: sudo bash install.sh --ref <태그 또는 커밋 SHA>
+#   사용자 배포 서버: sudo bash install.sh --url <URL> [--version <버전>]
+#   제거 (실행 기록/백업은 남김): sudo bash install.sh --uninstall
 set -euo pipefail
 
 DIST_URL="${WEBGUARD_DIST_URL:-__WEBGUARD_DIST_URL__}"   # tools/build-dist.sh 가 배포 주소로 채움
@@ -15,7 +15,9 @@ VERSION="latest"
 PREFIX="/opt/webguard"
 BIN="/usr/local/bin/webguard"
 CONF_DIR="/etc/webguard"
-MODE="remote"
+MODE="github"
+GITHUB_REF="main"
+case "$DIST_URL" in http://*|https://*) MODE="remote" ;; esac
 EXPECT_SHA=""
 
 say()  { printf '\033[34m[*]\033[0m %s\n' "$*"; }
@@ -25,7 +27,8 @@ die()  { printf '\033[31m[x]\033[0m %s\n' "$*" >&2; exit 1; }
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --url) DIST_URL="$2"; shift ;;
+    --url) DIST_URL="${2:?--url 값 필요}"; MODE="remote"; shift ;;
+    --ref) GITHUB_REF="${2:?--ref 값 필요}"; shift ;;
     --version) VERSION="$2"; shift ;;
     --prefix) PREFIX="$2"; shift ;;
     --sha256) EXPECT_SHA="$2"; shift ;;
@@ -58,7 +61,22 @@ if [ "$MODE" = "local" ]; then
   SRC="$(cd "$(dirname "$0")" && pwd)"
   [ -x "$SRC/webguard" ] && [ -d "$SRC/lib" ] || die "$SRC 에 webguard 파일이 없습니다"
   VERSION="$(sed -n 's/^WG_VERSION="\(.*\)"/\1/p' "$SRC/lib/common.sh")"
-  mkdir -p "$TMP/pkg" && cp -a "$SRC/." "$TMP/pkg/"
+  mkdir -p "$TMP/pkg"
+  for item in webguard install.sh README.md LICENSE lib assets conf; do cp -a "$SRC/$item" "$TMP/pkg/"; done
+elif [ "$MODE" = github ]; then
+  case "$GITHUB_REF" in *[!0-9A-Za-z._-]*|""|.|..) die "잘못된 GitHub ref: $GITHUB_REF" ;; esac
+  [ "$VERSION" = latest ] || die "GitHub 설치에는 --version 대신 --ref 를 사용하세요"
+  ARCHIVE_URL="https://github.com/OVERockq/webguard/archive/${GITHUB_REF}.tar.gz"
+  say "GitHub 다운로드: $ARCHIVE_URL"
+  curl -fsSL -o "$TMP/github.tar.gz" "$ARCHIVE_URL" || die "GitHub 다운로드 실패"
+  if [ -n "$EXPECT_SHA" ]; then
+    if command -v sha256sum >/dev/null 2>&1; then GOT="$(sha256sum "$TMP/github.tar.gz" | awk '{print $1}')"; else GOT="$(shasum -a 256 "$TMP/github.tar.gz" | awk '{print $1}')"; fi
+    [ "$GOT" = "$EXPECT_SHA" ] || die "GitHub 아카이브 체크섬 불일치"
+  fi
+  mkdir -p "$TMP/pkg"
+  tar -xzf "$TMP/github.tar.gz" -C "$TMP/pkg" --strip-components=1 --no-same-owner
+  [ -f "$TMP/pkg/lib/common.sh" ] || die "GitHub 소스 구성이 올바르지 않습니다"
+  VERSION="$(sed -n 's/^WG_VERSION="\(.*\)"/\1/p' "$TMP/pkg/lib/common.sh")"
 else
   case "$DIST_URL" in __*|"") die "배포 주소가 없습니다: --url https://<배포서버>/webguard 또는 WEBGUARD_DIST_URL 지정" ;; esac
   DIST_URL="${DIST_URL%/}"
@@ -77,11 +95,20 @@ else
   [ -f "$TMP/pkg/webguard" ] && [ -d "$TMP/pkg/lib" ] || die "패키지 구성이 올바르지 않습니다"
 fi
 
-# ---- 설치
+# ---- 설치 (개발 파일·Git 이력·로컬 비밀정보는 설치하지 않음)
+case "$VERSION" in *[!0-9A-Za-z._-]*|""|.|..) die "잘못된 설치 버전: $VERSION" ;; esac
+for item in webguard install.sh README.md LICENSE lib assets conf; do
+  [ -e "$TMP/pkg/$item" ] || die "필수 파일이 없습니다: $item"
+done
 DEST="$PREFIX/releases/$VERSION"
-rm -rf "$DEST"; mkdir -p "$DEST"
-cp -a "$TMP/pkg/." "$DEST/"
-rm -rf "$DEST/tests" "$DEST/dist"
+if [ -e "$DEST" ]; then
+  PREVIOUS="$(mktemp -d "$PREFIX/releases/${VERSION}.previous.XXXXXX")"
+  rmdir "$PREVIOUS"
+  mv "$DEST" "$PREVIOUS"
+  say "이전 설치 보존: $PREVIOUS"
+fi
+mkdir -p "$DEST"
+for item in webguard install.sh README.md LICENSE lib assets conf; do cp -a "$TMP/pkg/$item" "$DEST/"; done
 chown -R root:root "$DEST"; chmod -R go-w "$DEST"; chmod 755 "$DEST/webguard"
 ln -sfn "$DEST" "$PREFIX/current"
 ln -sfn "$PREFIX/current/webguard" "$BIN"

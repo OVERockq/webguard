@@ -11,7 +11,7 @@ VER="$(sed -n 's/^WG_VERSION="\(.*\)"/\1/p' "$ROOT/lib/common.sh")"
 OUT="$ROOT/dist"; mkdir -p "$OUT"
 STAGE="$(mktemp -d)"; trap 'rm -rf "$STAGE"' EXIT
 mkdir -p "$STAGE/webguard-$VER"
-( cd "$ROOT" && tar --exclude=./dist --exclude=./tests --exclude='.DS_Store' -cf - . ) | tar -xf - -C "$STAGE/webguard-$VER"
+( cd "$ROOT" && tar -cf - webguard install.sh README.md LICENSE lib assets conf ) | tar -xf - -C "$STAGE/webguard-$VER"
 sed -i.bak "s#__WEBGUARD_DIST_URL__#${URL%/}#" "$STAGE/webguard-$VER/install.sh" && rm -f "$STAGE/webguard-$VER/install.sh.bak"
 COPYFILE_DISABLE=1 tar -C "$STAGE" --owner=0 --group=0 -czf "$OUT/webguard-$VER.tar.gz" "webguard-$VER" 2>/dev/null \
   || COPYFILE_DISABLE=1 tar -C "$STAGE" -czf "$OUT/webguard-$VER.tar.gz" "webguard-$VER"

@@ -1,0 +1,80 @@
+--- /dev/null
++++ clone/public/.htaccess
+@@ -0,0 +1,38 @@
++# BEGIN WebGuard:headers
++<IfModule mod_headers.c>
++  Header set X-Frame-Options "SAMEORIGIN"
++  Header unset X-Powered-By
++  Header always unset X-Powered-By
++</IfModule>
++# END WebGuard:headers
++# BEGIN WebGuard:files-102585085
++<FilesMatch "\.(sql|sql\.gz|sql\.bz2|sql\.zip|dump|bak|old|orig|save|swp|swo|backup)$|^\.env|^\.htpasswd$|\.(pem|key)$|~$|\.php[0-9]?\.(txt|bk|bkp|[0-9]+)$">
++  <IfModule mod_authz_core.c>
++    Require all denied
++  </IfModule>
++  <IfModule !mod_authz_core.c>
++    Order allow,deny
++    Deny from all
++  </IfModule>
++</FilesMatch>
++# END WebGuard:files-102585085
++# BEGIN WebGuard:ini
++<IfModule mod_php.c>
++  php_flag display_errors Off
++  php_flag log_errors On
++  php_flag session.cookie_httponly 1
++  php_flag session.use_strict_mode 1
++</IfModule>
++<IfModule mod_php7.c>
++  php_flag display_errors Off
++  php_flag log_errors On
++  php_flag session.cookie_httponly 1
++  php_flag session.use_strict_mode 1
++</IfModule>
++<IfModule mod_php5.c>
++  php_flag display_errors Off
++  php_flag log_errors On
++  php_flag session.cookie_httponly 1
++  php_flag session.use_strict_mode 1
++</IfModule>
++# END WebGuard:ini
+--- /dev/null
++++ clone/public/.git/.htaccess
+@@ -0,0 +1,9 @@
++# BEGIN WebGuard:deny
++<IfModule mod_authz_core.c>
++  Require all denied
++</IfModule>
++<IfModule !mod_authz_core.c>
++  Order allow,deny
++  Deny from all
++</IfModule>
++# END WebGuard:deny
+--- /dev/null
++++ clone/public/uploads/.htaccess
+@@ -0,0 +1,20 @@
++# BEGIN WebGuard:noexec
++<FilesMatch "\.(php[0-9]?|pht|phtml|phar|inc|pl|py|cgi|sh)$">
++  <IfModule mod_authz_core.c>
++    Require all denied
++  </IfModule>
++  <IfModule !mod_authz_core.c>
++    Order allow,deny
++    Deny from all
++  </IfModule>
++</FilesMatch>
++<IfModule mod_php.c>
++  php_flag engine off
++</IfModule>
++<IfModule mod_php7.c>
++  php_flag engine off
++</IfModule>
++<IfModule mod_php5.c>
++  php_flag engine off
++</IfModule>
++# END WebGuard:noexec
+--- clone/public/phpinfo.php
++++ /dev/null
+@@ -1 +0,0 @@
+-<?php phpinfo();

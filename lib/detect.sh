@@ -5,6 +5,7 @@
 # 웹서버가 실제로 사용하는 PHP(FPM/mod_php)의 설정을 확인하기 위해
 # 임의 이름의 1회용 파일을 문서루트에 두고 HTTP로 호출 후 즉시 삭제한다.
 probe_php() { # probe_php <출력파일>  → 0 성공
+  [ "${WG_DIAGNOSTIC_PASSIVE:-0}" = 1 ] && return 1
   local out="$1" token name f
   http_available || [ -n "${SITE_URL:-}" ] || return 1
   token="$(rand_hex 16)"; name="wg-probe-$(rand_hex 6).php"; f="$DOCROOT/$name"
@@ -21,6 +22,7 @@ probe_php() { # probe_php <출력파일>  → 0 성공
 
 # 임시 PHP 파일을 만들어 지정 쿼리로 요청 → HTTP 상태코드 (가드 동작 확인 등)
 php_temp_request() { # <쿼리문자열>
+  [ "${WG_DIAGNOSTIC_PASSIVE:-0}" = 1 ] && return 1
   local name f code
   name="wg-t-$(rand_hex 6).php"; f="$DOCROOT/$name"
   printf "<?php echo 'ok';\n" >"$f" || { echo 000; return; }
@@ -371,7 +373,9 @@ cmd_analyze() {
 
   # HTTP 접근 확인
   env_set HTTP_OK 0
-  if [ -n "$SITE_URL" ] && have curl; then
+  if [ "${WG_DIAGNOSTIC_PASSIVE:-0}" = 1 ]; then
+    log_info "기본 진단: HTTP 요청과 사이트 임시 프로브를 생략합니다"
+  elif [ -n "$SITE_URL" ] && have curl; then
     local tmp code; tmp="$(mktemp "$RUN_DIR/h.XXXX")"
     code="$(http_fetch "/" "$tmp" "$tmp.h")"
     if [ "$code" != "000" ] && [ -n "$code" ]; then
